@@ -2,6 +2,8 @@ import telebot
 import random
 from random import choice
 from telebot import types
+import json
+from os.path import exists
 
 token ='7656715836:AAEt0XV72nz5G8PFChni9EOlDxJNMlxZfyk'
 bot=telebot.TeleBot(token)
@@ -103,6 +105,10 @@ Dystopia = ['«Господь гнева», Роджер Желязны и Фи�
             '«1984», Джордж Оруэлл. Классическая антиутопия о тоталитарном обществе, где правительство контролирует все аспекты жизни граждан. Главный герой, Уинстон Смит, работает на Министерство правды, но начинает сомневаться в системе и мечтает о свободе. Оруэлл поднимает вопросы о власти, манипуляции информацией и личной свободе.',
             '«Мы», Евгений Замятин. Один из первых антиутопических романов, действие которого происходит в будущем обществе, где все подчинено строгому контролю и математическому расчету. Главный герой, Д-503, начинает осознавать ограничения своей жизни и стремится к свободе. Замятин исследует идеи индивидуальности и коллективизма.']
 
+if not exists('database.json'):
+    with open('database.json', 'w', encoding='utf-8') as f:
+        f.write(json.dumps(dict()))
+
 class InheritanceBook:
     def __init__(self):
         self.books = {
@@ -141,18 +147,7 @@ def start_message(message):
 @bot.message_handler(content_types=['text'])
 def message_text(message):
     if message.text == '/genre':
-        markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
-        btn = types.KeyboardButton('Классика')
-        btn1 = types.KeyboardButton('Романтика')
-        btn2 = types.KeyboardButton('Детектив')
-        btn3 = types.KeyboardButton('Мистика')
-        btn4 = types.KeyboardButton('Фэнтези')
-        btn5 = types.KeyboardButton('Триллер')
-        btn6 = types.KeyboardButton('Приключения')
-        btn7 = types.KeyboardButton('Фантастика')
-        btn8 = types.KeyboardButton('Антиутопия')
-        markup.add(btn, btn1, btn2, btn3, btn4, btn5, btn6, btn7, btn8)
-        bot.send_message(message.chat.id, 'Какой жанр выберем сегодня?', reply_markup=markup)
+        choose_genre(message)
     elif message.text in ['Классика', 'Романтика', 'Детектив','Мистика','Фэнтези','Триллер','Приключения','Фантастика','Антиутопия']:
         chosen_book = book_selector.get_random_book(message.text)
         if chosen_book:
@@ -172,18 +167,19 @@ def message_text(message):
              if message.chat.id not in user_books:
                 user_books[message.chat.id] = []
              user_books[message.chat.id].append(chosen_books[message.chat.id])
+             save_book(message.chat.id, chosen_books[message.chat.id])
              markup = types.InlineKeyboardMarkup()
              markup.add(types.InlineKeyboardButton('Перейти на сайт', url='https://mybook.ru/'))
              bot.reply_to(message,'Вас заинтересовала эта книга? Тогда вы можешь перейти на сайт и прочитать её или вернуться к ней позже в своей маленькой библиотеке /my_books (ᵔ ᵕ ᵔ)',reply_markup=markup)
     elif message.text == 'Мне не нравится':
         bot.send_message(message.chat.id,'Жаль, что вас не заинтересовало... В следующий раз мы точно что-то найдем для вас (⸝⸝⸝O﹏ O⸝⸝⸝)/genre')
     elif message.text == '/my_books':
-        if message.chat.id in user_books and user_books[message.chat.id]:
+        books = get_books(message.chat.id)
+        if books:
             markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
             btn = types.KeyboardButton('Отлично')
             markup.add(btn)
-            books_list = "\n".join(user_books[message.chat.id])
-            bot.send_message(message.chat.id, f'\n⋆⭒˚.⋆Ваши сохраненные книги⋆⭒˚.⋆\n{books_list}', reply_markup=markup)
+            bot.send_message(message.chat.id, f'\n⋆⭒˚.⋆Ваши сохраненные книги⋆⭒˚.⋆\n{"\n----------\n".join(books)}', reply_markup=markup)
         else:
             bot.send_message(message.chat.id, 'У вас пока нет сохраненных книг ( ˶°ㅁ°) !! Давайте быстрее добавим их.')
     elif message.text == 'Отлично':
@@ -191,6 +187,43 @@ def message_text(message):
 
     else:
         bot.send_message(message.chat.id, 'С вами приятно поговорить! Вот только вы узнаете меня лучше если посмотрите в меню ૮₍ ˶ᵔ ᵕ ᵔ˶ ₎ა')
+
+def choose_genre(message):
+    markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
+    btn = types.KeyboardButton('Классика')
+    btn1 = types.KeyboardButton('Романтика')
+    btn2 = types.KeyboardButton('Детектив')
+    btn3 = types.KeyboardButton('Мистика')
+    btn4 = types.KeyboardButton('Фэнтези')
+    btn5 = types.KeyboardButton('Триллер')
+    btn6 = types.KeyboardButton('Приключения')
+    btn7 = types.KeyboardButton('Фантастика')
+    btn8 = types.KeyboardButton('Антиутопия')
+    markup.add(btn, btn1, btn2, btn3, btn4, btn5, btn6, btn7, btn8)
+    bot.send_message(message.chat.id, 'Какой жанр выберем сегодня?', reply_markup=markup)
+
+def save_book(user_id: int, book: dict) -> None:
+    with open('database.json', 'r', encoding='utf-8') as f:
+        all_data = json.loads(f.read())
+    user_id = str(user_id)
+    if user_id in all_data.keys():
+        all_data[user_id].append(book)
+    else:
+        all_data[user_id] = [book]
+    with open('database.json', 'w', encoding='utf-8') as f:
+        f.write(json.dumps(all_data, indent=4))
+
+def get_books(user_id: int) -> list:
+    with open('database.json', 'r', encoding='utf-8') as f:
+        all_data = json.loads(f.read())
+    user_id = str(user_id)
+    if user_id in all_data.keys():
+        return all_data[user_id]
+    else:
+        all_data[user_id] = []
+        with open('database.json', 'w', encoding='utf-8') as f:
+            f.write(json.dumps(all_data, indent=4))
+        return []
 
 bot.infinity_polling()
 
